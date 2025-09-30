@@ -31,9 +31,7 @@ SHAPES = {
 
 ORDER = ['I','O','L','S','T','J','Z']
 
-# -----------------------------
-# Piece
-# -----------------------------
+
 class Piece:
     def __init__(self, x, y, kind):
         self.x = x
@@ -220,9 +218,7 @@ class Renderer:
                              (MARGIN+PLAY_W//2-self.font.size(sub)[0]//2,
                               MARGIN+PLAY_H//2+30))
 
-# -----------------------------
-# App
-# -----------------------------
+
 class App:
     def __init__(self):
         pygame.init()
