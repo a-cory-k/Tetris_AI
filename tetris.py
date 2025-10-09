@@ -1,4 +1,4 @@
-import pygame, random, sys
+import pygame, random
 
 COLS, ROWS = 10, 20
 BLOCK = 32
@@ -20,19 +20,103 @@ COLORS = [
 ]
 
 SHAPES = {
-    'I':[["....","####","....","...."],["..#.","..#.","..#.","..#."]],
-    'O':[[".##.",".##.","....","...."]],
-    'T':[[".#..","###.","....","...."],[".#..",".##.","..#.","...."],["....","###.",".#..","...."],[".#..","##..",".#..","...."]],
-    'S':[["..##",".##.","....","...."],[".#..",".##.","..#.","...."]],
-    'Z':[[".##.","..##","....","...."],["..#.",".##.",".#..","...."]],
-    'J':[["#...","###.","....","...."],[".##.",".#..",".#..","...."],["....","###.","..#.","...."],[".#..",".#..","##..","...."]],
-    'L':[["..#.","###.","....","...."],[".#..",".#..",".##.","...."],["....","###.","#...","...."],["##..",".#..",".#..","...."]],
+    'I': [
+        ["....",
+         "####",
+         "....",
+         "...."],
+        ["..#.",
+         "..#.",
+         "..#.",
+         "..#."]
+    ],
+    'O': [
+        [".##.",
+         ".##.",
+         "....",
+         "...."]
+    ],
+    'T': [
+        [".#..",
+         "###.",
+         "....",
+         "...."],
+        [".#..",
+         ".##.",
+         ".#..",
+         "...."],
+        ["....",
+         "###.",
+         ".#..",
+         "...."],
+        [".#..",
+         "##..",
+         ".#..",
+         "...."]
+    ],
+    'S': [
+        ["..##",
+         ".##.",
+         "....",
+         "...."],
+        [".#..",
+         ".##.",
+         "..#.",
+         "...."]
+    ],
+    'Z': [
+        [".##.",
+         "..##",
+         "....",
+         "...."],
+        ["..#.",
+         ".##.",
+         ".#..",
+         "...."]
+    ],
+    'J': [
+        ["#...",
+         "###.",
+         "....",
+         "...."],
+        [".##.",
+         ".#..",
+         ".#..",
+         "...."],
+        ["....",
+         "###.",
+         "..#.",
+         "...."],
+        [".#..",
+         ".#..",
+         "##..",
+         "...."]
+    ],
+    'L': [
+        ["..#.",
+         "###.",
+         "....",
+         "...."],
+        [".#..",
+         ".#..",
+         ".##.",
+         "...."],
+        ["....",
+         "###.",
+         "#...",
+         "...."],
+        ["##..",
+         ".#..",
+         ".#..",
+         "...."]
+    ]
 }
 
 ORDER = ['I','O','L','S','T','J','Z']
 
-
 class Piece:
+
+
     def __init__(self, x, y, kind):
         self.x = x
         self.y = y
@@ -40,19 +124,21 @@ class Piece:
         self.rot = 0
         self.shape = SHAPES[kind]
         self.color = COLORS[ORDER.index(kind)]
-    def cells (self):
+
+    def cells(self):
         pattern = self.shape[self.rot]
         positions = []
         for r in range(4):
             for c in range(4):
                 if pattern[r][c] == '#':
-                    positions.append((self.x + c - 2, self.y + r - 1))
+                    positions.append((int(self.x + c - 1), int(self.y + r - 1)))
         return positions
 
     def rotated(self, dir=1):
         p = Piece(self.x, self.y, self.kind)
         p.rot = (self.rot + dir) % len(self.shape)
         return p
+
 
 class Board:
     def __init__(self):
@@ -218,7 +304,6 @@ class Renderer:
                              (MARGIN+PLAY_W//2-self.font.size(sub)[0]//2,
                               MARGIN+PLAY_H//2+30))
 
-
 class App:
     def __init__(self):
         pygame.init()
@@ -233,7 +318,7 @@ class App:
     def restart(self):
         self.game = Game()
 
-    def run(self):
+    def run(self, bot_enabled=False, bot=None):
         running=True
         while running:
             dt = self.clock.tick(FPS)/1000.0
@@ -269,6 +354,12 @@ class App:
                 elif event.type==pygame.KEYUP and event.key==pygame.K_DOWN:
                     self.game.soft_drop=False
 
+            if bot_enabled and bot:
+                best_piece, metrics = bot.best_move()
+                if best_piece:
+                    self.game.current = best_piece
+
+
             self.game.step(dt)
             self.renderer.draw_window(self.game)
             if not self.game.over and not self.game.paused:
@@ -283,9 +374,4 @@ class App:
 
         pygame.quit()
 
-if __name__=="__main__":
-    try:
-        App().run()
-    except Exception as e:
-        print("Error:",e)
-        pygame.quit();sys.exit(1)
+
