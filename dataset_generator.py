@@ -14,9 +14,20 @@ class TetrisDataCollector:
         with open(self.filename, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([
-                'game_id', 'kind', 'rot', 'x',
-                'heights', 'holes', 'bumpiness',
-                'cleared', 'score', 'is_best'
+                'game_id',
+                'kind',
+                'rot',
+                'x',
+                'heights',
+                'holes',
+                'bumpiness',
+                'cleared',
+                'aggregate_height',
+                'max_height',
+                'holes_density',
+                'surface_roughness',
+                'score',
+                'is_best'
             ])
 
             for game_id in range(1, self.num_games + 1):
@@ -61,8 +72,11 @@ class TetrisDataCollector:
             metrics['holes'],
             metrics['bumpiness'],
             metrics['cleared'],
-            metrics['score'],
-            1
+            metrics['aggregate_height'],
+            metrics['max_height'],
+            metrics['holes_density'],
+            metrics['surface_roughness'],
+            metrics['score']
         ]
         writer.writerow(row)
 
@@ -134,11 +148,11 @@ class TetrisDataCollector:
 
 if __name__ == "__main__":
     collector = TetrisDataCollector(
-        filename="tetris_dataset_all_moves.csv",
+        filename="tetris_dataset_only_good_moves.csv",
         num_games=200,
         limit_fps=False,
         fps=60,
-        mode="all" # if want write only good moves use best, else use all
+        mode="best" # if want write only good moves use best, else use all
     )
     collector.run()
 
