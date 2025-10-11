@@ -128,10 +128,13 @@ class Piece:
     def cells(self):
         pattern = self.shape[self.rot]
         positions = []
+        x_offset, y_offset = 1, 1
+        if self.kind == 'I' and self.rot == 1:
+            x_offset = 2
         for r in range(4):
             for c in range(4):
                 if pattern[r][c] == '#':
-                    positions.append((int(self.x + c - 1), int(self.y + r - 1)))
+                    positions.append((int(self.x + c - x_offset), int(self.y + r - y_offset)))
         return positions
 
     def rotated(self, dir=1):
