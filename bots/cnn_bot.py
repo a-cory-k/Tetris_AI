@@ -1,0 +1,82 @@
+import torch
+import numpy as np
+from app.tetris_dual import Board, Piece, COLS, ROWS
+import torch.nn as nn
+
+class CNNWithKind(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Flatten()
+        )
+        self.fc_shared = nn.Sequential(
+            nn.Linear(64 * 20 * 10 + 7, 256),
+            nn.ReLU()
+        )
+        self.fc_x = nn.Linear(256, 10)
+        self.fc_rot = nn.Linear(256, 4)
+
+    def forward(self, x, kind):
+        x = self.conv(x)
+        kind_onehot = nn.functional.one_hot(kind, num_classes=7).float()
+        x = torch.cat([x, kind_onehot], dim=1)
+        x = self.fc_shared(x)
+        out_x = self.fc_x(x)
+        out_rot = self.fc_rot(x)
+        return out_x, out_rot
+
+
+class CnnBot:
+    def __init__(self, model_path):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = CNNWithKind().to(self.device)
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.model.eval()
+
+    def board_to_tensor(self, board):
+        grid = board.create_grid()
+        arr = np.zeros((1, 20, 10), dtype=np.float32)
+        for y in range(20):
+            for x in range(10):
+                arr[0, y, x] = 1.0 if grid[y][x] else 0.0
+        return torch.tensor(arr, dtype=torch.float32).unsqueeze(0).to(self.device)
+
+    def best_move(self, game):
+        current_piece = game.current
+        board_tensor = self.board_to_tensor(game.board)
+        kind_map = {'I': 0, 'J': 1, 'L': 2, 'O': 3, 'S': 4, 'T': 5, 'Z': 6}
+        kind_tensor = torch.tensor([kind_map[current_piece.kind]], dtype=torch.long).to(self.device)
+
+        with torch.no_grad():
+            out_x, out_rot = self.model(board_tensor, kind_tensor)
+            x_pred = out_x.argmax(1).item()
+            rot_pred = out_rot.argmax(1).item()
+
+
+        best_piece = Piece(x_pred, current_piece.y, current_piece.kind)
+        best_piece.rot = rot_pred
+
+  
+        while game.board.valid(best_piece):
+            best_piece.y += 1
+        best_piece.y -= 1
+
+
+        if not game.board.valid(best_piece):
+            for dx in range(-3, 4):
+                test_piece = Piece(best_piece.x + dx, best_piece.y, best_piece.kind)
+                test_piece.rot = best_piece.rot
+            
+                while game.board.valid(test_piece):
+                    test_piece.y += 1
+                test_piece.y -= 1
+                if game.board.valid(test_piece):
+                    best_piece = test_piece
+                    break
+
+        return best_piece, 0.0
+
