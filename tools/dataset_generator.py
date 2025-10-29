@@ -1,42 +1,80 @@
+"""
+Module for collecting Tetris game data.
+
+This module defines a class 'TetrisDataCollector' that runs Tetris games
+using a bot and records various game states and bot decisions to a CSV file
+for dataset creation.
+"""
+
 import csv
 import numpy as np
-from tetris_for_gym import App, Piece, Board, COLS
+import pygame
+from app.tetris_dual import App, Piece, Board, COLS
 from bots.heuristic_bot import Bot_Trainer
 
+
 class TetrisDataCollector:
-    def __init__(self, filename="tetris_dataset_only_good_moves.csv", num_games=100, limit_fps=False, fps=60, mode="best"):
+    """
+    Runs automated Tetris games to collect data for machine learning.
+
+    Can be configured to save only the bot's best move or all possible
+    moves with their scores.
+    """
+
+    def __init__(self, filename="tetris_dataset.csv", num_games=100,
+                 fps_limit=None, mode="best"):
+        """
+        Initializes the data collector.
+
+        Args:
+            filename (str): The name of the output CSV file.
+            num_games (int): The number of games to simulate.
+            fps_limit (int, optional): If set, limits the game speed to
+                                       this FPS. Defaults to None (unlimited).
+            mode (str): "best" (only record the chosen move) or
+                        "all" (record all possible moves).
+        """
         self.filename = filename
         self.num_games = num_games
-        self.limit_fps = limit_fps
-        self.fps = fps
+        self.fps_limit = fps_limit
         self.mode = mode
 
     def run(self):
-        with open(self.filename, "w", newline="") as f:
+        """
+        Runs the full data collection process for the specified number of games.
+        """
+        # W1514: Added encoding="utf-8"
+        with open(self.filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
-                'game_id','kind','rot','x','heights','holes','bumpiness',
-                'cleared','aggregate_height','max_height','holes_density',
-                'surface_roughness','score','is_best'
+                'game_id', 'kind', 'rot', 'x', 'heights', 'holes', 'bumpiness',
+                'cleared', 'aggregate_height', 'max_height', 'holes_density',
+                'surface_roughness', 'score', 'is_best'
             ])
             for game_id in range(1, self.num_games + 1):
                 print(f"Game {game_id}/{self.num_games}")
                 self.run_single_game(writer, game_id)
 
     def run_single_game(self, writer, game_id):
+        """
+        Runs a single game of Tetris and writes data to the CSV writer.
+
+        Args:
+            writer: The csv.writer object.
+            game_id (int): The identifier for the current game.
+        """
         app = App()
         game = app.game
         bot = Bot_Trainer(game)
 
         clock = None
-        if self.limit_fps:
-            import pygame
+        if self.fps_limit:
             clock = pygame.time.Clock()
 
         running = True
         while running:
-            if self.limit_fps:
-                clock.tick(self.fps)
+            if self.fps_limit:
+                clock.tick(self.fps_limit)
             if game.over:
                 running = False
                 continue
@@ -46,16 +84,13 @@ class TetrisDataCollector:
             elif self.mode == "all":
                 self.record_all_moves(writer, bot, game, game_id)
 
-    def record_best_move(self, writer, bot, game, game_id):
-        best_piece, metrics = bot.best_move()
-        game.current = best_piece
-        game.lock_piece()
-
-        row = [
+    def _create_metrics_row(self, game_id, piece, metrics, is_best):
+        """Helper function to create a standardized data row."""
+        return [
             game_id,
-            best_piece.kind,
-            best_piece.rot,
-            best_piece.x,
+            piece.kind,
+            piece.rot,
+            piece.x,
             ",".join(map(str, metrics['heights'])),
             metrics['holes'],
             metrics['bumpiness'],
@@ -65,31 +100,42 @@ class TetrisDataCollector:
             metrics['holes_density'],
             metrics['surface_roughness'],
             metrics['score'],
-            1
+            1 if is_best else 0
         ]
-        writer.writerow(row)
 
-    def record_all_moves(self, writer, bot, game, game_id):
-        current_kind = game.current.kind
-        current_y = game.current.y
-        shape_len = len(game.current.shape)
+    def record_best_move(self, writer, bot, game, game_id):
+        """
+        Finds the best move, records it, and advances the game.
 
-        best_piece, best_metrics = bot.best_move()
+        Args:
+            writer: The csv.writer object.
+            bot (Bot_Trainer): The bot instance.
+            game (Game): The current game state.
+            game_id (int): The identifier for the current game.
+        """
+        # E1120: Pass 'game' to 'best_move'
+        best_piece, metrics = bot.best_move(game)
         game.current = best_piece
         game.lock_piece()
 
-        row = [
-            game_id,
-            best_piece.kind,
-            best_piece.rot,
-            best_piece.x,
-            ",".join(map(str, best_metrics['heights'])),
-            best_metrics['holes'],
-            best_metrics['bumpiness'],
-            best_metrics['cleared'],
-            best_metrics['score'],
-            1
-        ]
+        row = self._create_metrics_row(game_id, best_piece, metrics, True)
+        writer.writerow(row)
+    # pylint:disable = R0914
+    def record_all_moves(self, writer, bot, game, game_id):
+        """
+        Records all possible moves for the current piece and advances the game.
+
+        Args:
+            writer: The csv.writer object.
+            bot (Bot_Trainer): The bot instance.
+            game (Game): The current game state.
+            game_id (int): The identifier for the current game.
+        """
+        current_kind = game.current.kind
+        current_y = game.current.y
+        shape_len = len(game.current.shape)
+        best_piece, best_metrics = bot.best_move(game)
+        row = self._create_metrics_row(game_id, best_piece, best_metrics, True)
         writer.writerow(row)
 
         for rot in range(shape_len):
@@ -97,43 +143,42 @@ class TetrisDataCollector:
                 piece = Piece(x, current_y, current_kind)
                 piece.rot = rot
 
-                while game.board.valid(piece):
+                temp_board = Board()
+                temp_board.locked = game.board.locked.copy()
+
+                while temp_board.valid(piece):
                     piece.y += 1
                 piece.y -= 1
 
-                if not game.board.valid(piece):
+                if not temp_board.valid(piece):
                     continue
-
-                temp_board = Board()
-                temp_board.locked = game.board.locked.copy()
-                temp_board.add_piece(piece)
-                cleared = temp_board.clear_rows()
-                score, metrics = bot.evaluate_board(temp_board, cleared)
 
                 if (piece.kind == best_piece.kind and
-                    piece.rot == best_piece.rot and
-                    piece.x == best_piece.x):
+                        piece.rot == best_piece.rot and
+                        piece.x == best_piece.x):
                     continue
 
-                row = [
-                    game_id,
-                    piece.kind,
-                    piece.rot,
-                    piece.x,
-                    ",".join(map(str, metrics['heights'])),
-                    metrics['holes'],
-                    metrics['bumpiness'],
-                    metrics['cleared'],
-                    metrics['score'],
-                    0
-                ]
+                temp_board.add_piece(piece)
+                cleared = temp_board.clear_rows()
+                _, metrics = bot.evaluate_board(temp_board, cleared)
+
+                row = self._create_metrics_row(game_id, piece, metrics, False)
                 writer.writerow(row)
 
+        game.current = best_piece
+        game.lock_piece()
 
     def run_cnn_best(self, filename="tetris_dataset_cnn_best.csv"):
-        with open(filename, "w", newline="") as f:
+        """
+        Runs data collection for CNN, saving the board state.
+
+        Args:
+            filename (str): Output CSV file name.
+        """
+        with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            header = ['game_id'] + [f'c{i}' for i in range(20*10)] + ['kind','rot','x','action']
+            header = ['game_id'] + [f'c{i}' for i in range(20 * 10)] + \
+                     ['kind', 'rot', 'x', 'action']
             writer.writerow(header)
 
             for game_id in range(1, self.num_games + 1):
@@ -141,39 +186,67 @@ class TetrisDataCollector:
                 self.run_single_game_cnn(writer, game_id)
 
     def run_single_game_cnn(self, writer, game_id):
+        """
+        Runs a single game and records board state data for CNN.
+
+        Args:
+            writer: The csv.writer object.
+            game_id (int): The identifier for the current game.
+        """
         app = App()
         game = app.game
         bot = Bot_Trainer(game)
 
         clock = None
-        if self.limit_fps:
-            import pygame
+        if self.fps_limit:
             clock = pygame.time.Clock()
 
         running = True
         while running:
-            if self.limit_fps:
-                clock.tick(self.fps)
+            if self.fps_limit:
+                clock.tick(self.fps_limit)
             if game.over:
                 running = False
                 continue
 
-            best_piece, metrics = bot.best_move()
+            best_piece, _ = bot.best_move(game)
             game.current = best_piece
             game.lock_piece()
-            self.record_cnn_data(writer, game_id, game, best_piece, action='best')
+            self.record_cnn_data(writer, game_id, game, best_piece, 'best')
 
+    # pylint: disable=R0913
+    # pylint: disable=R0917
     def record_cnn_data(self, writer, game_id, game, piece, action):
+        """
+        Writes a single row of CNN-formatted data.
+
+        Args:
+            writer: The csv.writer object.
+            game_id (int): The identifier for the current game.
+            game (Game): The current game state.
+            piece (Piece): The piece that was placed.
+            action (str): A label for the action (e.g., 'best').
+        """
         field_flat = self.get_board_matrix(game.board).flatten()
         x_val = piece.x
-        if x_val < 0:
-            print(f"Game {game_id}, piece {piece.kind}, rot {piece.rot}, x={x_val}, y={piece.y}")
-        row = [game_id] + field_flat.tolist() + [piece.kind, piece.rot, x_val, action]
+        row = [game_id] + field_flat.tolist() + \
+              [piece.kind, piece.rot, x_val, action]
         writer.writerow(row)
 
     def get_board_matrix(self, board, rows=20, cols=10):
+        """
+        Converts the board's locked pieces into a 2D numpy array.
+
+        Args:
+            board (Board): The game board.
+            rows (int): The height of the matrix.
+            cols (int): The width of the matrix.
+
+        Returns:
+            np.array: A 2D array (matrix) representing the board.
+        """
         mat = np.zeros((rows, cols), dtype=int)
-        for (x, y), val in board.locked.items():
+        for (x, y), _ in board.locked.items():
             if 0 <= y < rows and 0 <= x < cols:
                 mat[y, x] = 1
         return mat
@@ -183,11 +256,8 @@ if __name__ == "__main__":
     collector = TetrisDataCollector(
         filename="tetris_dataset_only_good_moves.csv",
         num_games=100,
-        limit_fps=False,
-        fps=60,
+        fps_limit=None,  # Set to 60 to limit FPS, None for max speed
         mode="best"
     )
-
-
-    #collector.run()
+    # collector.run()
     collector.run_cnn_best(filename="tetris_dataset_cnn_best.csv")
