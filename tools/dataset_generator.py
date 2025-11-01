@@ -43,7 +43,6 @@ class TetrisDataCollector:
         """
         Runs the full data collection process for the specified number of games.
         """
-        # W1514: Added encoding="utf-8"
         with open(self.filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -113,7 +112,7 @@ class TetrisDataCollector:
             game (Game): The current game state.
             game_id (int): The identifier for the current game.
         """
-        # E1120: Pass 'game' to 'best_move'
+
         best_piece, metrics = bot.best_move(game)
         game.current = best_piece
         game.lock_piece()

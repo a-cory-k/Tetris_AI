@@ -1,18 +1,19 @@
 # pylint: disable=no-member
 """
-A dual-screen and single-screen Tetris game implementation using Pygame.
+Retro-pixel Tetris with light CRT effect and 8-bit sounds.
 
-This module defines all the core logic for a Tetris game, including:
-- Piece and Board classes
-- Game logic for single-player
-- Renderer class for drawing
-- App class for single-player game loop
-- AppDual class for a two-player, side-by-side game loop
+Replace your current file with this. It uses a pixel aesthetic (retro),
+light scanlines, subtle vignette, pixel font fallback and simple 8-bit sounds.
+
+If you want full retro experience, place:
+- pixel font file at assets/pixel_font.ttf (optional)
+- beep sound at assets/beep.wav (optional)
+- clear sound at assets/clear.wav (optional)
 """
 
+import os
 import random
 import pygame
-
 
 COLS, ROWS = 10, 20
 BLOCK = 32
@@ -133,19 +134,27 @@ SHAPES = {
 
 ORDER = ['I', 'O', 'L', 'S', 'T', 'J', 'Z']
 
+PIXEL_PALETTE = [
+    (0, 0, 0),  # 0 black
+    (24, 24, 24),  # 1 dark grey (background)
+    (80, 80, 80),  # 2 mid grey (borders)
+    (180, 180, 180),  # 3 light (text)
+    (255, 255, 255),  # 4 white
+]
+CRT_SCANLINE_ALPHA = 24
+CRT_VIGNETTE_ALPHA = 90
+SCANLINE_SPACING = 2
+PIXEL_FONT_PATH = os.path.join("assets", "pixel_font.ttf")
+
+
+SOUND_BEEP = "app/assets"
+SOUND_CLEAR = "app/assets"
+MUSIC_PATH = "app/assets"
 
 class Piece:
     """Represents a single Tetris piece (tetromino)."""
 
     def __init__(self, x, y, kind):
-        """
-        Initializes a new Piece.
-
-        Args:
-            x (int): The initial x-coordinate (grid-based).
-            y (int): The initial y-coordinate (grid-based).
-            kind (str): The shape type ('I', 'O', 'T', etc.).
-        """
         self.x = x
         self.y = y
         self.kind = kind
@@ -155,8 +164,8 @@ class Piece:
 
     def cells(self):
         """
-        Calculates the 4 (x, y) grid coordinates of the piece's blocks
-        based on its current position and rotation.
+        Returns list of (x, y) coordinates for '#' cells of the current rotation.
+        Uses small offsets to align pieces visually (like original implementation).
         """
         pattern = self.shape[self.rot]
         positions = []
@@ -171,27 +180,20 @@ class Piece:
         return positions
 
     def rotated(self, direction=1):
-        """
-        Creates a new Piece instance that is a rotated version of this one.
-
-        Args:
-            direction (int): 1 for clockwise (default), -1 for counter-clockwise.
-        """
+        """Return a rotated copy (clockwise=+1, ccw=-1)."""
         p = Piece(self.x, self.y, self.kind)
         p.rot = (self.rot + direction) % len(self.shape)
         return p
 
 
 class Board:
-    """Represents the game board and all locked pieces."""
+    """Represents the game board and locked blocks."""
 
     def __init__(self):
-        """Initializes an empty board."""
         self.locked = {}
         self.cleared_lines = 0
 
     def create_grid(self):
-        """Creates a 2D list representation of the board for rendering."""
         grid = [[None for _ in range(COLS)] for _ in range(ROWS)]
         for (x, y), color in self.locked.items():
             if 0 <= x < COLS and 0 <= y < ROWS:
@@ -199,7 +201,6 @@ class Board:
         return grid
 
     def valid(self, piece):
-        """Checks if a piece's position is valid (on-grid, not overlapping)."""
         for x, y in piece.cells():
             if x < 0 or x >= COLS or y >= ROWS:
                 return False
@@ -208,16 +209,14 @@ class Board:
         return True
 
     def add_piece(self, piece):
-        """Locks a piece onto the board."""
         for x, y in piece.cells():
             self.locked[(x, y)] = piece.color
 
     def check_lost(self):
-        """Checks if any locked piece is above the visible playfield."""
         return any(y < 0 for _, y in self.locked)
 
     def clear_rows(self):
-        """Checks for and clears completed rows, shifting pieces down."""
+        """Find and remove full rows. Return number of cleared rows."""
         full_rows = [y for y in range(ROWS)
                      if all((x, y) in self.locked for x in range(COLS))]
         if not full_rows:
@@ -225,7 +224,7 @@ class Board:
 
         for y in full_rows:
             for x in range(COLS):
-                self.locked.pop((x, y))
+                self.locked.pop((x, y), None)
 
         new_locked = {}
         for (x, y), color in self.locked.items():
@@ -238,10 +237,9 @@ class Board:
 
 # pylint: disable=too-many-instance-attributes
 class Game:
-    """Manages the state of a single Tetris game."""
+    """Manages state for a single Tetris game, includes retro clear animation state."""
 
     def __init__(self):
-        """Initializes a new game session."""
         self.board = Board()
         self.queue = self.new_bag()
         self.current = self.get_next()
@@ -252,26 +250,26 @@ class Game:
         self.paused = False
         self.over = False
 
+        self.clear_anim_timer = 0.0
+        self.clear_anim_duration = 0.45
+        self.clear_anim_rows = 0
+
     def new_bag(self):
-        """Creates a new 'bag' of all 7 pieces, shuffled."""
         bag = ORDER.copy()
         random.shuffle(bag)
         return bag
 
     def get_next(self):
-        """Gets the next piece from the queue, refilling if needed."""
         while len(self.queue) < 3:
             self.queue.extend(self.new_bag())
         return Piece(COLS // 2, -1, self.queue.pop(0))
 
     def peek_next(self, n=3):
-        """Looks at the next N pieces in the queue without removing them."""
         while len(self.queue) < n:
             self.queue.extend(self.new_bag())
         return self.queue[:n]
 
     def hard_drop(self):
-        """Instantly drops the current piece to the bottom."""
         while True:
             m = Piece(self.current.x, self.current.y + 1, self.current.kind)
             m.rot = self.current.rot
@@ -282,10 +280,12 @@ class Game:
         self.lock_piece()
 
     def lock_piece(self):
-        """Locks the current piece, checks lines, and gets the next piece."""
+        """Lock current piece, clear lines and set next. Sets clear animation state if any."""
         self.board.add_piece(self.current)
         cleared = self.board.clear_rows()
         if cleared:
+            self.clear_anim_timer = self.clear_anim_duration
+            self.clear_anim_rows = cleared
             self.lines += cleared
             self.score += {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}[cleared]
         self.current = self.get_next()
@@ -294,12 +294,12 @@ class Game:
             self.over = True
 
     def step(self, dt):
-        """
-        Advances the game state by one time step (dt).
-        Handles gravity and piece locking.
-        """
         if self.paused or self.over:
             return
+        # update clear animation timer
+        if self.clear_anim_timer > 0.0:
+            self.clear_anim_timer = max(0.0, self.clear_anim_timer - dt)
+
         self.fall_time += dt
         speed = self.fall_interval * (0.2 if self.soft_drop else 1.0)
         if self.fall_time >= speed:
@@ -313,139 +313,192 @@ class Game:
 
 
 class Renderer:
-    """Handles all drawing operations for the game."""
+    """Retro-pixel renderer with light CRT effect and simple sound play helper."""
 
-    def __init__(self, screen, font, font_big):
+    def __init__(self, screen, font, font_big, pixel_font=None, sounds=None):
         """
-        Initializes the Renderer.
-
-        Args:
-            screen: The main pygame.Surface to draw on.
-            font (pygame.font.Font): The standard font for text.
-            font_big (pygame.font.Font): The large font for titles.
+        pixel_font: pygame.font.Font or None
+        sounds: dict {'beep': Sound, 'clear': Sound} or {}
         """
         self.screen = screen
         self.font = font
         self.font_big = font_big
+        self.pixel_font = pixel_font
+        self.sounds = sounds or {}
 
-    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def _font(self, size=20, bold=False):
+        if self.pixel_font:
+            try:
+                return pygame.font.Font(PIXEL_FONT_PATH, size)
+            except Exception:
+                pass
+        return pygame.font.SysFont("consolas", size, bold=bold)
+
     def draw_cell(self, x, y, color, offset_x, offset_y):
-        """
-        Draws a single block cell at a grid position with an offset.
-
-        Args:
-            x (int): Grid x-coordinate.
-            y (int): Grid y-coordinate.
-            color (tuple): RGB color.
-            offset_x (int): Pixel offset for the x-axis.
-            offset_y (int): Pixel offset for the y-axis.
-        """
         px, py = offset_x + x * BLOCK, offset_y + y * BLOCK
         rect = pygame.Rect(px, py, BLOCK, BLOCK)
         pygame.draw.rect(self.screen, color, rect)
-        pygame.draw.rect(self.screen, DARK, rect, 2)
-    #pylint: disable= R0914
-    def draw_window(self, game, offset_x, offset_y):
-        """
-        Draws the main game window, board, and side panel for one player.
+        # inner pixel rim to emphasize chunky pixels
+        inner = pygame.Rect(px + 1, py + 1, BLOCK - 2, BLOCK - 2)
+        darker = tuple(max(0, c - 30) for c in color)
+        pygame.draw.rect(self.screen, darker, inner)
+        pygame.draw.rect(self.screen, PIXEL_PALETTE[2], rect, 1)
 
-        Args:
-            game (Game): The game state to draw.
-            offset_x (int): Pixel offset for the x-axis.
-            offset_y (int): Pixel offset for the y-axis.
-        """
-        play_rect = (offset_x, offset_y, PLAY_W, PLAY_H)
-        pygame.draw.rect(self.screen, (25, 25, 35), play_rect, border_radius=6)
+    def _draw_scanlines(self):
+        h = self.screen.get_height()
+        w = self.screen.get_width()
+        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+        for y in range(0, h, SCANLINE_SPACING):
+            overlay.fill((0, 0, 0, CRT_SCANLINE_ALPHA), rect=pygame.Rect(0, y, w, 1))
+        self.screen.blit(overlay, (0, 0))
+
+    def _draw_vignette(self):
+        w, h = self.screen.get_size()
+        vign = pygame.Surface((w, h), pygame.SRCALPHA)
+        steps = 7
+        for i in range(steps):
+            alpha = int(CRT_VIGNETTE_ALPHA * (i / steps) ** 1.6)
+            pad = int((i / steps) * max(w, h) * 0.055)
+            r = pygame.Rect(pad, pad, w - pad * 2, h - pad * 2)
+            pygame.draw.rect(vign, (0, 0, 0, alpha), r, border_radius=6)
+        self.screen.blit(vign, (0, 0))
+
+    def draw_window(self, game, offset_x, offset_y):
+        play_rect = pygame.Rect(offset_x, offset_y, PLAY_W, PLAY_H)
+        pygame.draw.rect(self.screen, PIXEL_PALETTE[1], play_rect)
+        pygame.draw.rect(self.screen, PIXEL_PALETTE[2], play_rect, 2)
 
         grid = game.board.create_grid()
         for y, row in enumerate(grid):
             for x, color in enumerate(row):
                 if color:
                     self.draw_cell(x, y, color, offset_x, offset_y)
+                else:
+                    if (x + y) % 2 == 0:
+                        px = offset_x + x * BLOCK
+                        py = offset_y + y * BLOCK
+                        self.screen.fill((8, 8, 12), rect=pygame.Rect(px, py, 1, 1))
+
         for c in range(COLS + 1):
             x = offset_x + c * BLOCK
-            pygame.draw.line(self.screen, GRID, (x, offset_y), (x, offset_y + PLAY_H))
+            pygame.draw.line(self.screen, PIXEL_PALETTE[2], (x, offset_y), (x, offset_y + PLAY_H))
         for r in range(ROWS + 1):
             y = offset_y + r * BLOCK
-            pygame.draw.line(self.screen, GRID, (offset_x, y), (offset_x + PLAY_W, y))
+            pygame.draw.line(self.screen, PIXEL_PALETTE[2], (offset_x, y), (offset_x + PLAY_W, y))
 
         panel_x = offset_x + PLAY_W + MARGIN
-        panel_rect = (panel_x, offset_y, SIDE, PLAY_H)
-        pygame.draw.rect(self.screen, (20, 20, 28), panel_rect, border_radius=6)
-        title = self.font_big.render("TETRIS", True, WHITE)
-        self.screen.blit(title, (panel_x + 20, offset_y + 10))
-        score_text = self.font.render(f"Score: {game.score}", True, WHITE)
-        self.screen.blit(score_text, (panel_x + 20, offset_y + 80))
+        panel_rect = pygame.Rect(panel_x, offset_y, SIDE, PLAY_H)
+        pygame.draw.rect(self.screen, PIXEL_PALETTE[1], panel_rect)
+        pygame.draw.rect(self.screen, PIXEL_PALETTE[2], panel_rect, 2)
 
-        self.draw_next(game.queue, panel_x, offset_y + 200)
+        title_font = self._font(36, bold=True)
+        title = title_font.render("TETRIS", False, PIXEL_PALETTE[4])
+
+        self.screen.blit(title, (panel_x + 18 + 1, offset_y + 10 + 1))
+        self.screen.blit(title, (panel_x + 18, offset_y + 10))
+
+        score_font = self._font(18)
+        score_text = score_font.render(f"Score: {game.score}", False, PIXEL_PALETTE[4])
+        self.screen.blit(score_text, (panel_x + 12, offset_y + 80))
+
+        self.draw_next(game.queue, panel_x + 8, offset_y + 160, small=True)
+
+        hint = score_font.render("R restart ", False, PIXEL_PALETTE[3])
+        self.screen.blit(hint, (panel_x + 8, offset_y + PLAY_H - 40))
+        hint = score_font.render("M menu ", False, PIXEL_PALETTE[3])
+        self.screen.blit(hint, (panel_x + 8, offset_y + PLAY_H - 20))
+        hint = score_font.render("P Pause", False, PIXEL_PALETTE[3])
+        self.screen.blit(hint, (panel_x + 8, offset_y + PLAY_H - 60))
+        self._draw_scanlines()
+        self._draw_vignette()
 
     def draw_piece(self, piece, offset_x, offset_y):
-        """Draws the currently falling piece."""
         for x, y in piece.cells():
             if y >= 0:
                 self.draw_cell(x, y, piece.color, offset_x, offset_y)
 
-    def draw_next(self, queue, px, py):
-        """Draws the 'Next' piece queue in the side panel."""
-        self.screen.blit(self.font.render("Next:", True, WHITE), (px, py))
+    def draw_next(self, queue, px, py, small=False):
+        label_font = self._font(14)
+        self.screen.blit(label_font.render("Next:", False, PIXEL_PALETTE[4]), (px, py))
+        size = BLOCK // 2 if small else BLOCK
+        spacing = 56 if small else 80
         for idx, k in enumerate(queue[:3]):
             shape = SHAPES[k][0]
             color = COLORS[ORDER.index(k)]
             for r, row in enumerate(shape):
                 for c, cell in enumerate(row):
                     if cell == '#':
-                        sx = px + c * (BLOCK // 2)
-                        sy = py + r * (BLOCK // 2) + idx * 70 + 30  # Offset for text
-                        rect = pygame.Rect(sx, sy, BLOCK // 2, BLOCK // 2)
+                        sx = px + c * (size) + 4
+                        sy = py + r * (size) + idx * spacing + 20
+                        rect = pygame.Rect(sx, sy, size, size)
                         pygame.draw.rect(self.screen, color, rect)
-                        pygame.draw.rect(self.screen, DARK, rect, 2)
+                        pygame.draw.rect(self.screen, PIXEL_PALETTE[2], rect, 1)
 
     def draw_center_text(self, text, sub=None, offset_x=0, offset_y=0):
-        """Draws text centered in the playfield (e.g., "GAME OVER")."""
-        label = self.font_big.render(text, True, WHITE)
+        title_font = self._font(28, bold=True)
+        sub_font = self._font(16)
+        label = title_font.render(text, False, PIXEL_PALETTE[4])
         self.screen.blit(label, (
             offset_x + PLAY_W // 2 - label.get_width() // 2,
             offset_y + PLAY_H // 2 - label.get_height() // 2
         ))
         if sub is not None:
-            sub_label = self.font.render(sub, True, LIGHT)
+            sub_label = sub_font.render(sub, False, PIXEL_PALETTE[3])
             self.screen.blit(sub_label, (
                 offset_x + PLAY_W // 2 - sub_label.get_width() // 2,
                 offset_y + PLAY_H // 2 + 30
             ))
 
+    def play(self, name):
+        """Play named sound if available."""
+        if not self.sounds:
+            return
+        snd = self.sounds.get(name)
+        if snd:
+            try:
+                snd.play()
+            except Exception:
+                pass
 
-# for 2 players
 
+# Dual-player app
 # pylint: disable=too-many-instance-attributes
 class AppDual:
     """
-    Main application class for the 2-player (Human vs. Human,
-    Human vs. Bot, or Bot vs. Bot) game.
+    Dual-player application class (Human vs Human / Human vs Bot / Bot vs Bot).
     """
 
     def __init__(self, bot_enabled=False, bot=None, bot1=None, bot2=None):
-        """
-        Initializes the dual-player application.
-
-        Args:
-            bot_enabled (bool): True for Player vs. Bot mode.
-            bot (Bot): The bot for Player vs. Bot mode (controls player 2).
-            bot1 (Bot): The bot for player 1 (Bot vs. Bot mode).
-            bot2 (Bot): The bot for player 2 (Bot vs. Bot mode).
-        """
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH * 2, HEIGHT))
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("consolas", 22)
         self.font_big = pygame.font.SysFont("consolas", 42, bold=True)
+        pixel_font = None
+        sounds = {}
+        try:
+            pixel_font = pygame.font.Font(PIXEL_FONT_PATH, 16)
+        except Exception:
+            pixel_font = None
+
+        try:
+            pygame.mixer.init()
+            beep = pygame.mixer.Sound(SOUND_BEEP) if os.path.exists(SOUND_BEEP) else None
+            clear = pygame.mixer.Sound(SOUND_CLEAR) if os.path.exists(SOUND_CLEAR) else None
+            sounds = {}
+            if beep:
+                sounds['beep'] = beep
+            if clear:
+                sounds['clear'] = clear
+        except Exception:
+            sounds = {}
 
         self.games = [Game(), Game()]
-        self.bot_enabled = bot_enabled  # pvb
-        self.bot = bot  # 1b
-        self.bot1 = bot1  # 1b for bvb
-        self.bot2 = bot2  # 2b for bvb
-        self.renderer = Renderer(self.screen, self.font, self.font_big)
+        self.bot_enabled = bot_enabled
+        self.bot = bot
+        self.bot1 = bot1
+        self.bot2 = bot2
+        self.renderer = Renderer(self.screen, self.font, self.font_big, pixel_font=pixel_font, sounds=sounds)
 
         self.bot_move_interval = 0.3
         self.bot_timers = [0.0, 0.0]
@@ -456,25 +509,15 @@ class AppDual:
             {'left': pygame.K_LEFT, 'right': pygame.K_RIGHT, 'down': pygame.K_DOWN,
              'rotate_cw': pygame.K_UP, 'rotate_ccw': pygame.K_SLASH, 'hard': pygame.K_RSHIFT}
         ]
+        self._prev_clear_state = [False, False]
 
     def restart(self):
-        """Resets both games to their initial state."""
         self.games = [Game(), Game()]
         self.bot_timers = [0.0, 0.0]
         self.winner = None
+        self._prev_clear_state = [False, False]
 
-    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def move_piece(self, game, dx=0, dy=0, rot=0, hard=False):
-        """
-        Applies a movement to a game's current piece, if valid.
-
-        Args:
-            game (Game): The game instance to modify.
-            dx (int): Change in x.
-            dy (int): Change in y.
-            rot (int): Change in rotation.
-            hard (bool): If True, perform a hard drop.
-        """
         if hard:
             game.hard_drop()
             return
@@ -482,19 +525,17 @@ class AppDual:
         piece.rot = (game.current.rot + rot) % len(game.current.shape)
         if game.board.valid(piece):
             game.current = piece
-    # functions
-    # _handle_player_input, _handle_events, _update_bots, _draw_frame
-    # were rewrite from App,
-    # but for 2 players with GPT
+            # play small beep on move (optional)
+            self.renderer.play('beep')
+
     def _handle_player_input(self, event):
-        """Handles key presses for player movement."""
         for i, ctrl in enumerate(self.controls):
             game = self.games[i]
 
             is_bot = False
-            if self.bot1 and self.bot2:  # bvb
+            if self.bot1 and self.bot2:
                 is_bot = True
-            if i == 1 and self.bot_enabled and self.bot:  # pvb
+            if i == 1 and self.bot_enabled and self.bot:
                 is_bot = True
 
             if is_bot or game.paused or game.over:
@@ -514,7 +555,6 @@ class AppDual:
                 self.move_piece(game, hard=True)
 
     def _handle_events(self):
-        """Handles all Pygame events (quit, restart, pause, input)."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -538,26 +578,22 @@ class AppDual:
         return True
 
     def _update_bots(self, dt):
-        """Updates bot timers and makes bot moves if ready."""
         for i in range(2):
             self.bot_timers[i] += dt
 
         if self.bot1 and self.bot2:
-            # bvb
             for i, bot in enumerate([self.bot1, self.bot2]):
                 game = self.games[i]
                 if not game.over and not game.paused and self.bot_timers[i] >= self.bot_move_interval:
                     self.bot_timers[i] = 0.0
                     bot.best_move(game)
         elif self.bot_enabled and self.bot:
-            # pvb
             game = self.games[1]
             if not game.over and not game.paused and self.bot_timers[1] >= self.bot_move_interval:
                 self.bot_timers[1] = 0.0
                 self.bot.best_move(game)
 
     def _update_winner(self):
-        """Checks for a winner and updates the winner status."""
         if self.winner is None:
             if self.games[0].over and not self.games[1].over:
                 self.winner = "Right Player Wins!"
@@ -567,7 +603,6 @@ class AppDual:
                 self.winner = "Draw!"
 
     def _draw_frame(self):
-        """Draws the entire game frame (both players)."""
         self.screen.fill(BG)
         for i, game in enumerate(self.games):
             offset_x = MARGIN + i * WIDTH
@@ -584,7 +619,6 @@ class AppDual:
         pygame.display.flip()
 
     def run(self):
-        """The main game loop for the dual-player app."""
         running = True
         while running:
             dt = self.clock.tick(FPS) / 1000.0
@@ -597,39 +631,59 @@ class AppDual:
             for g in self.games:
                 g.step(dt)
 
-            self._update_winner()
+            for i, g in enumerate(self.games):
+                now_clear = g.clear_anim_timer > 0.0
+                if now_clear and not self._prev_clear_state[i]:
+                    self.renderer.play('clear')
+                self._prev_clear_state[i] = now_clear
 
+            self._update_winner()
             self._draw_frame()
 
-        pygame.quit()
 
 
-# 1 player
-
+# Single-player app
 # pylint: disable=too-many-instance-attributes
 class App:
-    """Main application class for a single-player game."""
+    """Single-player application with pixel UI and light CRT."""
 
     def __init__(self):
-        """Initializes the single-player application."""
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("consolas", 22)
         self.font_big = pygame.font.SysFont("consolas", 42, bold=True)
+
+        sounds = {}
+        try:
+            pixel_font = pygame.font.Font(PIXEL_FONT_PATH, 16)
+        except Exception:
+            pixel_font = None
+
+        try:
+            pygame.mixer.init()
+            beep = pygame.mixer.Sound(SOUND_BEEP) if os.path.exists(SOUND_BEEP) else None
+            clear = pygame.mixer.Sound(SOUND_CLEAR) if os.path.exists(SOUND_CLEAR) else None
+            if beep:
+                sounds['beep'] = beep
+            if clear:
+                sounds['clear'] = clear
+        except Exception:
+            sounds = {}
+
         self.game = Game()
-        self.renderer = Renderer(self.screen, self.font, self.font_big)
+        self.renderer = Renderer(self.screen, self.font, self.font_big, pixel_font=pixel_font, sounds=sounds)
         self.fullscreen = False
         self.bot_move_interval = 0.3
         self.bot_timer = 0.0
+        self._prev_clear_state = False
 
     def restart(self):
-        """Resets the game to its initial state."""
         self.game = Game()
         self.bot_timer = 0.0
+        self._prev_clear_state = False
 
     def toggle_fullscreen(self):
-        """Toggles the display between fullscreen and windowed mode."""
         self.fullscreen = not self.fullscreen
         info = pygame.display.Info()
         if self.fullscreen:
@@ -637,10 +691,10 @@ class App:
             self.screen = pygame.display.set_mode(res, pygame.FULLSCREEN)
         else:
             self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        self.renderer = Renderer(self.screen, self.font, self.font_big)
+        self.renderer = Renderer(self.screen, self.font, self.font_big, pixel_font=self.renderer.pixel_font,
+                                 sounds=self.renderer.sounds)
 
     def handle_player_input(self, key):
-        """Handles key presses for player movement."""
         if self.game.paused or self.game.over:
             return
 
@@ -649,26 +703,30 @@ class App:
             m.rot = self.game.current.rot
             if self.game.board.valid(m):
                 self.game.current = m
+                self.renderer.play('beep')
         elif key == pygame.K_RIGHT:
             m = Piece(self.game.current.x + 1, self.game.current.y, self.game.current.kind)
             m.rot = self.game.current.rot
             if self.game.board.valid(m):
                 self.game.current = m
+                self.renderer.play('beep')
         elif key == pygame.K_DOWN:
             self.game.soft_drop = True
         elif key == pygame.K_SPACE:
             self.game.hard_drop()
+            self.renderer.play('beep')
         elif key in (pygame.K_UP, pygame.K_x):
             r = self.game.current.rotated(+1)
             if self.game.board.valid(r):
                 self.game.current = r
+                self.renderer.play('beep')
         elif key == pygame.K_z:
             r = self.game.current.rotated(-1)
             if self.game.board.valid(r):
                 self.game.current = r
+                self.renderer.play('beep')
 
     def handle_events(self, bot_enabled):
-        """Handles all Pygame events (quit, restart, pause, input)."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -693,7 +751,6 @@ class App:
         return True
 
     def update_bot(self, dt, bot):
-        """Updates the bot's timer and makes a move if ready."""
         if bot and not self.game.over and not self.game.paused:
             self.bot_timer += dt
             if self.bot_timer >= self.bot_move_interval:
@@ -701,7 +758,6 @@ class App:
                 bot.best_move(self.game)
 
     def draw_frame(self):
-        """Draws the entire game frame."""
         self.screen.fill(BG)
         self.renderer.draw_window(self.game, MARGIN, MARGIN)
 
@@ -712,16 +768,15 @@ class App:
         elif self.game.over:
             self.renderer.draw_center_text("R to restart/M to menu", offset_x=MARGIN, offset_y=MARGIN)
 
+        # if self.game.clear_anim_timer > 0.0:
+        #     alpha = int(180 * (self.game.clear_anim_timer / self.game.clear_anim_duration))
+        #     flash = pygame.Surface((PLAY_W, PLAY_H), pygame.SRCALPHA)
+        #     flash.fill((255, 255, 255, alpha))
+        #     self.screen.blit(flash, (MARGIN, MARGIN))
+
         pygame.display.flip()
 
     def run(self, bot_enabled=False, bot=None):
-        """
-        The main game loop for the single-player app.
-
-        Args:
-            bot_enabled (bool): True if a bot is playing.
-            bot (Bot): The bot instance to use if bot_enabled is True.
-        """
         running = True
         if bot_enabled and bot:
             self.bot_move_interval = 0.05
@@ -738,7 +793,18 @@ class App:
 
             if bot_enabled:
                 self.update_bot(dt, bot)
+
             self.game.step(dt)
+
+            now_clear = self.game.clear_anim_timer > 0.0
+            if now_clear and not self._prev_clear_state:
+                self.renderer.play('clear')
+            self._prev_clear_state = now_clear
+
             self.draw_frame()
 
-        pygame.quit()
+
+
+if __name__ == "__main__":
+    app = App()
+    app.run(bot_enabled=False)
