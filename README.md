@@ -27,7 +27,7 @@ The project is actively under development and serves as a research environment f
 │   ├── cnn_bot.py              # CNN-based inference agent
 │   ├── dqn_bot_CNN.py          # DQN agent using CNN architecture
 │   ├── DONT_WORK(lstm_bot).py  # Experimental LSTM-based agent (not fully functional)
-│   └── cnn_training/           # Training environment for CNN agents
+│   └── cnn_training/           # Training environment for DQN agents
 │       ├── tetris_env_cnn.py
 │       ├── tetris_play_cnn.py
 │       └── tetris_train_cnn.py
