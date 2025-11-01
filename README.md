@@ -70,7 +70,7 @@ After starting, a **main menu** will appear. You can choose one of the following
 
 # A demonstration of one DQN bot game
 
-https://github.com/user-attachments/assets/ca106273-aee6-4c3b-a9df-694592e19dbc
+![Мой-фильм-2-2](https://github.com/user-attachments/assets/11650220-14e3-4f30-ba52-f264782b056f)
 
 
 
