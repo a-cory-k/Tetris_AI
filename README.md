@@ -68,6 +68,10 @@ After starting, a **main menu** will appear. You can choose one of the following
 | 🕹️ **Single Player (SP)** | Play alone or watch a single AI agent play. | Choose a bot to observe its gameplay, or play manually yourself. |
 
 
+# A demonstration of one DQN bot game
+
+https://github.com/user-attachments/assets/ca106273-aee6-4c3b-a9df-694592e19dbc
+
 
 
 
