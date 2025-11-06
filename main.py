@@ -1,4 +1,6 @@
 # pylint: disable=no-member
+# pylint: disable=R0914
+# pylint: disable=R0912
 """
 Main menu and entry point for the Tetris AI application.
 
@@ -6,17 +8,14 @@ This script initializes Pygame and displays a main menu that allows the
 user to select different game modes, such as Single Player (Human or Bot),
 Player vs. Player, Bot vs. Bot, and Player vs. Bot.
 """
-
 from pathlib import Path
 import pygame
-import numpy as np  
+import numpy as np
 from app.tetris_dual import App, AppDual, Game
 from bots.heuristic_bot import Bot_Trainer
 from bots.cnn_bot import CnnBot
 from bots.dqn_bot_CNN import DQNBot
-
 from bots.lstm_bot import LstmBot
-
 pygame.init()
 screen = pygame.display.set_mode((600, 400))
 pygame.display.set_caption("TETRIS MENU")

@@ -1,3 +1,4 @@
+#pylint: disable=R0801
 # pylint: disable=no-member, too-many-locals
 """
 LstmBot implementation for playing Tetris.
@@ -7,9 +8,9 @@ the game state history. It maintains a sequence of the last N states
 to predict the next best action.
 """
 import torch
-import torch.nn as nn
+from torch import nn
 import numpy as np
-from app.tetris_dual import Piece, Game
+from app.tetris_dual import Piece
 from bots.heuristic_bot import apply_move, Bot_Trainer
 
 
@@ -18,6 +19,7 @@ class ActorLSTM(nn.Module):
     The ActorLSTM model class, matching the training architecture.
     """
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, input_dim, hidden_dim=64, num_layers=1, dropout=0, num_actions=40):
         """
         Initializes the LSTM model layers.
@@ -39,11 +41,13 @@ class ActorLSTM(nn.Module):
         return self.fc(out[:, -1, :])
 
 
+# pylint: disable=too-many-instance-attributes
 class LstmBot:
     """
     A bot that uses a trained LSTM model to make decisions.
     """
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, model_path, scaler_mean, scaler_scale, seq_len=15, num_rotations=4, num_cols=10):
         """
         Initializes the bot, loads the model, and sets up the scaler.
@@ -129,7 +133,6 @@ class LstmBot:
             if x > 0:
                 properties['bumpiness'] += abs(heights[x] - heights[x - 1])
 
-        # TODO: Implement 'holes_density' and 'surface_roughness' if used in training
 
         return properties
 
@@ -219,4 +222,3 @@ class LstmBot:
         apply_move(game, best_piece)
 
         return None, 0
-

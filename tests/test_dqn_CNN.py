@@ -1,3 +1,4 @@
+#pylint: disable=R0801
 """
 Unit tests for the DQNBot class.
 
@@ -5,7 +6,7 @@ This test suite mocks all external dependencies (torch, numpy, pygame,
 and custom training/environment modules) to test the bot's
 logic in isolation.
 """
-
+# pylint: disable=redefined-outer-name, wrong-import-position
 import sys
 from unittest.mock import MagicMock
 import pytest
@@ -35,18 +36,19 @@ sys.modules["torch.nn"] = mock_torch.nn
 
 mock_tetris_env = MagicMock()
 mock_tetris_env.TetrisEnv = MagicMock()
-sys.modules["bots.cnn_training.tetris_env_cnn"] = mock_tetris_env
+# FIX: Corrected path from cnn_training to dqn_training
+sys.modules["bots.dqn_training.tetris_env_cnn"] = mock_tetris_env
 
 mock_tetris_train = MagicMock()
 mock_tetris_train.DeepQNetwork = MagicMock()
 mock_tetris_train.DEVICE = "cpu"
 mock_tetris_train.GAMMA = 0.99
-sys.modules["bots.cnn_training.tetris_train_cnn"] = mock_tetris_train
+sys.modules["bots.dqn_training.tetris_train_cnn"] = mock_tetris_train
 
 from app.tetris_dual import Game, Piece
 from bots.dqn_bot_CNN import DQNBot
-from bots.cnn_training.tetris_env_cnn import TetrisEnv
-from bots.cnn_training.tetris_train_cnn import DeepQNetwork
+from bots.dqn_training.tetris_env_cnn import TetrisEnv
+from bots.dqn_training.tetris_train_cnn import DeepQNetwork
 
 
 @pytest.fixture

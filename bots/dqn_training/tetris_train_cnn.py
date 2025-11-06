@@ -27,7 +27,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch import optim
-from bots.cnn_training.tetris_env_cnn import TetrisEnv, ROWS, COLS, ORDER
+from bots.dqn_training.tetris_env_cnn import TetrisEnv, ROWS, COLS, ORDER
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

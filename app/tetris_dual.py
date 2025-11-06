@@ -1,4 +1,5 @@
 # pylint: disable=no-member
+# pylint: disable=R0917
 """
 Retro-pixel Tetris with light CRT effect and 8-bit sounds.
 
@@ -194,6 +195,7 @@ class Board:
         self.cleared_lines = 0
 
     def create_grid(self):
+        """Creates a 2D list representation of the board."""
         grid = [[None for _ in range(COLS)] for _ in range(ROWS)]
         for (x, y), color in self.locked.items():
             if 0 <= x < COLS and 0 <= y < ROWS:
@@ -201,6 +203,7 @@ class Board:
         return grid
 
     def valid(self, piece):
+        """Checks if the piece is in a valid board position."""
         for x, y in piece.cells():
             if x < 0 or x >= COLS or y >= ROWS:
                 return False
@@ -209,10 +212,12 @@ class Board:
         return True
 
     def add_piece(self, piece):
+        """Adds a piece's cells to the locked grid."""
         for x, y in piece.cells():
             self.locked[(x, y)] = piece.color
 
     def check_lost(self):
+        """Checks if any locked piece is above the top boundary."""
         return any(y < 0 for _, y in self.locked)
 
     def clear_rows(self):
@@ -255,21 +260,25 @@ class Game:
         self.clear_anim_rows = 0
 
     def new_bag(self):
+        """Creates a new shuffled bag of 7 tetrominoes."""
         bag = ORDER.copy()
         random.shuffle(bag)
         return bag
 
     def get_next(self):
+        """Gets the next piece from the queue, refilling if needed."""
         while len(self.queue) < 3:
             self.queue.extend(self.new_bag())
         return Piece(COLS // 2, -1, self.queue.pop(0))
 
     def peek_next(self, n=3):
+        """Peeks at the next N pieces in the queue."""
         while len(self.queue) < n:
             self.queue.extend(self.new_bag())
         return self.queue[:n]
 
     def hard_drop(self):
+        """Instantly drops the piece to the lowest valid position."""
         while True:
             m = Piece(self.current.x, self.current.y + 1, self.current.kind)
             m.rot = self.current.rot
@@ -294,6 +303,7 @@ class Game:
             self.over = True
 
     def step(self, dt):
+        """Updates the game state by one frame."""
         if self.paused or self.over:
             return
         # update clear animation timer
@@ -315,7 +325,9 @@ class Game:
 class Renderer:
     """Retro-pixel renderer with light CRT effect and simple sound play helper."""
 
+    # pylint: disable=too-many-arguments
     def __init__(self, screen, font, font_big, pixel_font=None, sounds=None):
+        # pylint: disable=too-many-instance-attributes
         """
         pixel_font: pygame.font.Font or None
         sounds: dict {'beep': Sound, 'clear': Sound} or {}
@@ -327,14 +339,18 @@ class Renderer:
         self.sounds = sounds or {}
 
     def _font(self, size=20, bold=False):
+        """Gets the pixel font if available, otherwise a system fallback."""
         if self.pixel_font:
             try:
                 return pygame.font.Font(PIXEL_FONT_PATH, size)
+            # pylint: disable=broad-exception-caught
             except Exception:
                 pass
         return pygame.font.SysFont("consolas", size, bold=bold)
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def draw_cell(self, x, y, color, offset_x, offset_y):
+        """Draws a single block cell with a pixel-art style."""
         px, py = offset_x + x * BLOCK, offset_y + y * BLOCK
         rect = pygame.Rect(px, py, BLOCK, BLOCK)
         pygame.draw.rect(self.screen, color, rect)
@@ -345,6 +361,7 @@ class Renderer:
         pygame.draw.rect(self.screen, PIXEL_PALETTE[2], rect, 1)
 
     def _draw_scanlines(self):
+        """Draws faint horizontal scanlines for a CRT effect."""
         h = self.screen.get_height()
         w = self.screen.get_width()
         overlay = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -353,6 +370,7 @@ class Renderer:
         self.screen.blit(overlay, (0, 0))
 
     def _draw_vignette(self):
+        """Draws a subtle vignette (darkened corners)."""
         w, h = self.screen.get_size()
         vign = pygame.Surface((w, h), pygame.SRCALPHA)
         steps = 7
@@ -363,7 +381,9 @@ class Renderer:
             pygame.draw.rect(vign, (0, 0, 0, alpha), r, border_radius=6)
         self.screen.blit(vign, (0, 0))
 
+    # pylint: disable=too-many-locals
     def draw_window(self, game, offset_x, offset_y):
+        """Draws the main game window, grid, and side panel."""
         play_rect = pygame.Rect(offset_x, offset_y, PLAY_W, PLAY_H)
         pygame.draw.rect(self.screen, PIXEL_PALETTE[1], play_rect)
         pygame.draw.rect(self.screen, PIXEL_PALETTE[2], play_rect, 2)
@@ -413,11 +433,14 @@ class Renderer:
         self._draw_vignette()
 
     def draw_piece(self, piece, offset_x, offset_y):
+        """Draws the active (falling) piece."""
         for x, y in piece.cells():
             if y >= 0:
                 self.draw_cell(x, y, piece.color, offset_x, offset_y)
 
+    # pylint: disable=too-many-locals
     def draw_next(self, queue, px, py, small=False):
+        """Draws the 'Next' pieces preview in the side panel."""
         label_font = self._font(14)
         self.screen.blit(label_font.render("Next:", False, PIXEL_PALETTE[4]), (px, py))
         size = BLOCK // 2 if small else BLOCK
@@ -435,6 +458,7 @@ class Renderer:
                         pygame.draw.rect(self.screen, PIXEL_PALETTE[2], rect, 1)
 
     def draw_center_text(self, text, sub=None, offset_x=0, offset_y=0):
+        """Draws text centered in the play area."""
         title_font = self._font(28, bold=True)
         sub_font = self._font(16)
         label = title_font.render(text, False, PIXEL_PALETTE[4])
@@ -455,6 +479,7 @@ class Renderer:
             return
         snd = self.sounds.get(name)
         if snd:
+            # pylint: disable=broad-exception-caught
             try:
                 snd.play()
             except Exception:
@@ -468,6 +493,7 @@ class AppDual:
     Dual-player application class (Human vs Human / Human vs Bot / Bot vs Bot).
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(self, bot_enabled=False, bot=None, bot1=None, bot2=None):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH * 2, HEIGHT))
@@ -476,11 +502,13 @@ class AppDual:
         self.font_big = pygame.font.SysFont("consolas", 42, bold=True)
         pixel_font = None
         sounds = {}
+        # pylint: disable=broad-exception-caught
         try:
             pixel_font = pygame.font.Font(PIXEL_FONT_PATH, 16)
         except Exception:
             pixel_font = None
 
+        # pylint: disable=broad-exception-caught
         try:
             pygame.mixer.init()
             beep = pygame.mixer.Sound(SOUND_BEEP) if os.path.exists(SOUND_BEEP) else None
@@ -512,12 +540,14 @@ class AppDual:
         self._prev_clear_state = [False, False]
 
     def restart(self):
+        """Restarts both games."""
         self.games = [Game(), Game()]
         self.bot_timers = [0.0, 0.0]
         self.winner = None
         self._prev_clear_state = [False, False]
 
     def move_piece(self, game, dx=0, dy=0, rot=0, hard=False):
+        """Moves the piece for the specified game."""
         if hard:
             game.hard_drop()
             return
@@ -529,6 +559,7 @@ class AppDual:
             self.renderer.play('beep')
 
     def _handle_player_input(self, event):
+        """Handles keydown events for both players."""
         for i, ctrl in enumerate(self.controls):
             game = self.games[i]
 
@@ -555,6 +586,7 @@ class AppDual:
                 self.move_piece(game, hard=True)
 
     def _handle_events(self):
+        """Processes all pygame events for the frame."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -578,6 +610,7 @@ class AppDual:
         return True
 
     def _update_bots(self, dt):
+        """Updates bot timers and makes bot moves if ready."""
         for i in range(2):
             self.bot_timers[i] += dt
 
@@ -594,6 +627,7 @@ class AppDual:
                 self.bot.best_move(game)
 
     def _update_winner(self):
+        """Checks for a winner and updates the winner attribute."""
         if self.winner is None:
             if self.games[0].over and not self.games[1].over:
                 self.winner = "Right Player Wins!"
@@ -603,6 +637,7 @@ class AppDual:
                 self.winner = "Draw!"
 
     def _draw_frame(self):
+        """Draws the entire screen for both players."""
         self.screen.fill(BG)
         for i, game in enumerate(self.games):
             offset_x = MARGIN + i * WIDTH
@@ -619,6 +654,7 @@ class AppDual:
         pygame.display.flip()
 
     def run(self):
+        """Main game loop for the dual-player app."""
         running = True
         while running:
             dt = self.clock.tick(FPS) / 1000.0
@@ -655,11 +691,13 @@ class App:
         self.font_big = pygame.font.SysFont("consolas", 42, bold=True)
 
         sounds = {}
+        # pylint: disable=broad-exception-caught
         try:
             pixel_font = pygame.font.Font(PIXEL_FONT_PATH, 16)
         except Exception:
             pixel_font = None
 
+        # pylint: disable=broad-exception-caught
         try:
             pygame.mixer.init()
             beep = pygame.mixer.Sound(SOUND_BEEP) if os.path.exists(SOUND_BEEP) else None
@@ -679,11 +717,13 @@ class App:
         self._prev_clear_state = False
 
     def restart(self):
+        """Restarts the game."""
         self.game = Game()
         self.bot_timer = 0.0
         self._prev_clear_state = False
 
     def toggle_fullscreen(self):
+        """Toggles the display between fullscreen and windowed mode."""
         self.fullscreen = not self.fullscreen
         info = pygame.display.Info()
         if self.fullscreen:
@@ -695,6 +735,7 @@ class App:
                                  sounds=self.renderer.sounds)
 
     def handle_player_input(self, key):
+        """Handles keydown events for player movement."""
         if self.game.paused or self.game.over:
             return
 
@@ -727,6 +768,7 @@ class App:
                 self.renderer.play('beep')
 
     def handle_events(self, bot_enabled):
+        """Processes all pygame events for the frame."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -751,6 +793,7 @@ class App:
         return True
 
     def update_bot(self, dt, bot):
+        """Updates the bot timer and makes a move if ready."""
         if bot and not self.game.over and not self.game.paused:
             self.bot_timer += dt
             if self.bot_timer >= self.bot_move_interval:
@@ -758,6 +801,7 @@ class App:
                 bot.best_move(self.game)
 
     def draw_frame(self):
+        """Draws the entire game screen for a single frame."""
         self.screen.fill(BG)
         self.renderer.draw_window(self.game, MARGIN, MARGIN)
 
@@ -777,6 +821,7 @@ class App:
         pygame.display.flip()
 
     def run(self, bot_enabled=False, bot=None):
+        """Main game loop for the single-player app."""
         running = True
         if bot_enabled and bot:
             self.bot_move_interval = 0.05

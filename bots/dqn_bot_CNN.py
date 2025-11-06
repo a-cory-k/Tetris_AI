@@ -1,3 +1,4 @@
+#pylint: disable=R0801
 """
 DQN (Deep Q-Network) Bot implementation for playing Tetris using a CNN.
 
@@ -9,8 +10,8 @@ import sys
 from pathlib import Path
 import torch
 import numpy as np
-from bots.cnn_training.tetris_train_cnn import DeepQNetwork, GAMMA, DEVICE
-from bots.cnn_training.tetris_env_cnn import TetrisEnv
+from bots.dqn_training.tetris_train_cnn import DeepQNetwork, GAMMA, DEVICE
+from bots.dqn_training.tetris_env_cnn import TetrisEnv
 from app.tetris_dual import  ROWS, COLS, ORDER
 
 project_root = str(Path(__file__).resolve().parent.parent)

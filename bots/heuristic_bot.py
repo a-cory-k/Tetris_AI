@@ -1,3 +1,4 @@
+#pylint: disable=R0801
 """
 A heuristic-based bot for playing Tetris.
 

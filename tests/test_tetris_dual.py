@@ -1,8 +1,10 @@
 """testing tetris dual """
-import pytest
+# pylint: disable=redefined-outer-name
 import sys
 from unittest.mock import MagicMock
+import pytest
 
+# Mock Pygame before app import
 mock_pygame = MagicMock()
 mock_pygame.font = MagicMock()
 mock_pygame.font.SysFont = MagicMock(return_value=MagicMock())
@@ -10,7 +12,9 @@ mock_pygame.font.SysFont = MagicMock(return_value=MagicMock())
 sys.modules["pygame"] = mock_pygame
 sys.modules["pygame.font"] = mock_pygame.font
 
+# pylint: disable=C0413
 from app.tetris_dual import Piece, Board, Game, COLS, ROWS, ORDER, COLORS
+
 @pytest.fixture
 def board():
     """Returns a new, empty Board for each test."""
@@ -20,6 +24,7 @@ def board():
 def game():
     """Returns a new Game instance for each test."""
     return Game()
+
 class TestPiece:
     """Tests for the Piece class."""
 
@@ -56,6 +61,7 @@ class TestPiece:
 
         p_rot_neg = p.rotated(-1)
         assert p_rot_neg.rot == 3
+
 class TestBoard:
     """Tests for the Board class."""
 
@@ -109,6 +115,7 @@ class TestBoard:
         assert (5, 19) in board.locked
         assert board.locked[(5, 19)] == (2, 2, 2)
         assert (0, 19) not in board.locked
+
     def test_clear_tetris(self, board):
         """Tests clearing four rows (a Tetris) and shifting blocks down."""
         # Fill rows 16, 17, 18, 19
@@ -223,6 +230,7 @@ class TestGame:
         game.step(0.4)
         assert game.current.y == 1
         assert game.fall_time == 0.0
+
     def test_step_soft_drop(self, game):
         """Tests that step() moves the piece down faster during a soft drop."""
         game.current = Piece(COLS // 2, 0, 'T')

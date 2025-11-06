@@ -5,8 +5,8 @@ import pygame
 import torch
 import numpy as np
 from app.tetris_dual import App, Game, ORDER, MARGIN
-from bots.cnn_training.tetris_env_cnn import TetrisEnv, ROWS, COLS
-from bots.cnn_training.tetris_train_cnn import DeepQNetwork, GAMMA, DEVICE
+from bots.dqn_training.tetris_env_cnn import TetrisEnv, ROWS, COLS
+from bots.dqn_training.tetris_train_cnn import DeepQNetwork, GAMMA, DEVICE
 
 
 class BotApp(App):

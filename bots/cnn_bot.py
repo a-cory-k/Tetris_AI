@@ -1,3 +1,4 @@
+#pylint: disable=R0801
 """
 CNN Bot implementation for playing Tetris.
 

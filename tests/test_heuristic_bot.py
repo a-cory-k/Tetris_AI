@@ -1,7 +1,10 @@
 """testing heuristic bot"""
-import pytest
+# pylint: disable=redefined-outer-name
+# pylint: disable=redefined-outer-name, wrong-import-position
+#pylint: disable=R0801
 import sys
 from unittest.mock import MagicMock
+import pytest
 
 mock_pygame = MagicMock()
 mock_pygame.font = MagicMock()
@@ -125,4 +128,3 @@ class TestBotIntegration:
         assert len(game.board.locked) == 3
         assert set(game.board.locked.keys()) == expected_locked_cells
         assert game.lines == 1
-
