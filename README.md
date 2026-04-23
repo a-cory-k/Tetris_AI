@@ -1,4 +1,4 @@
-# 🎮 Tetris AI
+# 🎮 Tetris Solver with Reinforcement Learning
 *Research project exploring AI agents in the Tetris environment using Reinforcement Learning and Deep Neural Networks.*
 
 <p align="center">
